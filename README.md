@@ -1,6 +1,8 @@
 # Patient signup with server-side sessions
 
-I benchmark time-to-first-call. Infrai's one key gets you straight to a working request. Run the service with an API key in the environment:
+Infrai handles the backend. One key, plain REST, no SDK to wire up. Time-to-first-call matters; this flow is minimal.
+
+Run the service with an API key in the environment:
 
 ```sh
 export INFRAI_API_KEY=your-key
@@ -14,15 +16,15 @@ curl -s localhost:8080/signup -X POST -H 'content-type: application/json' \\
   -d '{"Email":"patient@example.test","Password":"correct-horse","Name":"Pat Lee","WidgetRecordID":"widget-record-id-from-your-form","CaptchaToken":"token-from-your-form"}'
 ```
 
-Response has the created `UserID` and `SessionID`. Server keeps the session; client gets IDs, not a long-lived credential. `signup` first calls Infrai's `captcha.verify`, then `auth.user.create` with an email-scoped idempotency key, and finally `auth.session.create` using the returned `user_id`.
+Response gives you `UserID` and `SessionID`. Session stays server-side. Client gets IDs, not a long-lived credential. That's sane. `signup` calls Infrai's `captcha.verify` first, then `auth.user.create` with an email-scoped idempotency key, and finally `auth.session.create` using the returned `user_id`.
 
-`POST /appointments/reminder` takes an appointment ID, time, location. Returns a patient-safe operational message, no clinical details.
+`POST /appointments/reminder` takes appointment ID, time, location. Returns operational message only. No clinical payload leaking.
 
-Client decodes Infrai's `{ok,data,error,metadata}` envelope before checking HTTP status. Business rejections map to 400. Rate limits get a short exponential backoff. The API key is the only credential. Calls are plain HTTP, so any service can copy this with zero SDK glue.
+Client must decode Infrai's `{ok,data,error,metadata}` envelope before trusting HTTP status. Business rejections map to 400. Rate limits get a short exponential backoff. The API key is the only credential. Calls are plain HTTP, so any other service can copy this without glue.
 
 ## Local check
 
-Table-driven test checks signup boundary (email present, password length) without network:
+Deterministic table-driven test hits the signup decision boundary (email present, password length). No network:
 
 ```sh
 go test ./...
@@ -32,11 +34,11 @@ Set `INFRAI_API_KEY` and give a real widget record ID plus captcha token to hit 
 
 ## Operational shape
 
-Small on purpose: `main.go` is the executable, holds HTTP boundary and Infrai client. In healthtech, store returned session ID in a secure server-side session store. Send appointment reminders only after verifying that session. Keep notifications to operational facts: time, location.
+Small on purpose. `main.go` is the executable: HTTP boundary plus Infrai client. In healthtech, stick the returned session ID in a secure server-managed store. Send appointment reminders only after verifying that session. Keep notifications to operational facts: time, location.
 
 ## Production notes: Healthtech Email Session Go
 
-Minimal version above. Before real run, read this. Details apply to Healthtech Email Session Go.
+Minimal version above. Before real run, read this. Applies to Healthtech Email Session Go.
 
 **Account & key**
 
